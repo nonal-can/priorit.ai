@@ -1,41 +1,81 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { UserContext } from "./Usercontext";
+import { saveTasks, loadTasks } from "./task";
+import { LoginButton } from "./loginbutton";
 
 const genAI = new GoogleGenerativeAI(process.env.REACT_APP_GEMINI_API_KEY as string);
-console.log(process.env.REACT_APP_GEMINI_API_KEY)
-// const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
 type Task = {
   task: string;
   priority: "high" | "medium" | "low";
 };
 
-const priorityOrder = { high: 0, medium: 1, low: 2 };
+const fixTaskArray = (arr: any[]): Task[] =>
+  arr.map((t: any) => ({
+    task: t.task,
+    priority: (["high", "medium", "low"].includes(t.priority)
+      ? t.priority
+      : "medium") as "high" | "medium" | "low"
+  }));
 
 const App: React.FC = () => {
-  const [tasks, setTasks] = useState<string[]>([]);
+  const { user, authChecked } = useContext(UserContext);
+
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [rankedTasks, setRankedTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
+  const [inputTask, setInputTask] = useState(""); // ←追加
 
   const { transcript, listening, resetTranscript } = useSpeechRecognition();
 
-  
-  // 音声認識スタート
+  useEffect(() => {
+    if (user) {
+      loadTasks(user.uid).then((data) => {
+        setTasks(fixTaskArray(data || []));
+        setRankedTasks([]);
+      });
+    } else {
+      setTasks([]);
+      setRankedTasks([]);
+    }
+  }, [user]);
+
   const handleStart = () => {
     resetTranscript();
     SpeechRecognition.startListening({ continuous: false, language: "ja-JP" });
   };
 
-  // 音声→タスク追加
-  const handleAddTask = () => {
+  // 手入力タスク追加
+  const handleAddTaskManual = async () => {
+    if (!user || !inputTask.trim()) return;
+    const newTasks = [
+      ...tasks,
+      { task: inputTask.trim(), priority: "medium" as const }
+    ];
+    setTasks(newTasks);
+    await saveTasks(user.uid, newTasks);
+    setInputTask(""); // 入力欄クリア
+    setRankedTasks([]);
+  };
+
+  // 音声入力タスク追加
+  const handleAddTaskVoice = async () => {
+    if (!user) return;
     if (transcript.trim()) {
-      setTasks((prev) => [...prev, transcript.trim()]);
+      const newTasks = [
+        ...tasks,
+        { task: transcript.trim(), priority: "medium" as const }
+      ];
+      setTasks(newTasks);
+      await saveTasks(user.uid, newTasks);
       resetTranscript();
       SpeechRecognition.stopListening();
+      setRankedTasks([]);
     }
   };
 
-  // Geminiで優先順位付け
   const handleRank = async () => {
     setLoading(true);
     const prompt = `
@@ -47,21 +87,18 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
   {"task": "メール返信", "priority": "high"},
   {"task": "昼ごはん", "priority": "low"}
 ]
-タスク: ${JSON.stringify(tasks)}
+タスク: ${JSON.stringify(tasks.map(t => t.task))}
     `;
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     const result = await model.generateContent(prompt);
     const text = result.response.text();
     console.log("Gemini返答:", text);
 
-    // JSON部分だけ抽出（最初の[から最後の]まで）
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
       try {
-        const parsed: Task[] = JSON.parse(jsonMatch[0]);
-        setRankedTasks(
-          [...parsed].sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
-        );
+        const parsed = fixTaskArray(JSON.parse(jsonMatch[0]));
+        setRankedTasks(parsed);
       } catch (e) {
         alert("LLMの返答をパースできませんでした\n" + text);
       }
@@ -71,12 +108,27 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
     setLoading(false);
   };
 
+  if (!authChecked) return <div>認証確認中...</div>;
+  if (!user) return <LoginButton />;
+
   return (
     <div style={{ maxWidth: 480, margin: "2em auto", fontFamily: "sans-serif" }}>
       <h2>音声タスク管理（Gemini LLM連携）</h2>
       <div style={{ marginBottom: 16 }}>
+        <input
+          type="text"
+          value={inputTask}
+          onChange={e => setInputTask(e.target.value)}
+          placeholder="タスクを手入力"
+          style={{ marginRight: 8 }}
+        />
+        <button onClick={handleAddTaskManual} disabled={!inputTask.trim()}>
+          手入力でタスク追加
+        </button>
+      </div>
+      <div style={{ marginBottom: 16 }}>
         <button onClick={handleStart} disabled={listening}>🎤 音声入力</button>
-        <button onClick={handleAddTask} disabled={!transcript}>タスク追加</button>
+        <button onClick={handleAddTaskVoice} disabled={!transcript}>タスク追加</button>
         <span style={{ marginLeft: 8, color: listening ? "green" : "gray" }}>
           {listening ? "録音中..." : ""}
         </span>
@@ -85,7 +137,11 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
       <div>
         <strong>タスク一覧:</strong>
         <ul>
-          {tasks.map((t, i) => <li key={i}>{t}</li>)}
+          {tasks.map((t, i) => (
+            <li key={i}>
+              {t.task} [{t.priority}]
+            </li>
+          ))}
         </ul>
       </div>
       <button onClick={handleRank} disabled={tasks.length === 0 || loading}>
@@ -98,9 +154,10 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
             {rankedTasks.map((t, i) => (
               <li key={i}>
                 <span style={{ fontWeight: "bold" }}>{t.task}</span>
-                <span style={{ marginLeft: 8, color: {
-                  high: "red", medium: "orange", low: "gray"
-                }[t.priority] }}>
+                <span style={{
+                  marginLeft: 8,
+                  color: { high: "red", medium: "orange", low: "gray" }[t.priority]
+                }}>
                   [{t.priority}]
                 </span>
               </li>
