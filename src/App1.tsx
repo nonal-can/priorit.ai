@@ -4,6 +4,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { UserContext } from "./Usercontext";
 import { saveTasks, loadTasks } from "./task";
 import { LoginButton } from "./loginbutton";
+import { Box, Card, CardContent, IconButton, Typography, CardActionArea } from '@mui/material';
+import MicIcon from '@mui/icons-material/Mic';
 
 const genAI = new GoogleGenerativeAI(process.env.REACT_APP_GEMINI_API_KEY as string);
 
@@ -127,7 +129,10 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
         </button>
       </div>
       <div style={{ marginBottom: 16 }}>
-        <button onClick={handleStart} disabled={listening}>🎤 音声入力</button>
+        {/* <button onClick={handleStart} disabled={listening}>🎤 音声入力</button> */}
+        <IconButton onClick={handleStart} disabled={listening} color="primary" size="large" aria-label="start voice input">
+          <MicIcon />
+        </IconButton>
         <button onClick={handleAddTaskVoice} disabled={!transcript}>タスク追加</button>
         <span style={{ marginLeft: 8, color: listening ? "green" : "gray" }}>
           {listening ? "録音中..." : ""}
@@ -136,13 +141,43 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
       </div>
       <div>
         <strong>タスク一覧:</strong>
-        <ul>
+        <Box
+          sx={{
+            width: '100%',
+            display: 'grid',
+            gridTemplateRows: 'repeat(auto-fill, 1fr)',
+            borderRadius: 1,
+            gap: 1,
+          }}
+        >
           {tasks.map((t, i) => (
-            <li key={i}>
-              {t.task} [{t.priority}]
-            </li>
+            <Card style={{marginBottom: 0.5}}>
+              <CardActionArea
+                // onClick={() => setSelectedCard(index)}
+                // data-active={selectedCard === index ? '' : undefined}
+                sx={{
+                  height: '100%',
+                  '&[data-active]': {
+                    backgroundColor: 'action.selected',
+                    '&:hover': {
+                      backgroundColor: 'action.selectedHover',
+                    },
+                  },
+                  // bgcolor: 'primary.main',
+                }}
+              >
+                <CardContent sx={{ height: '100%' }}>
+                  <Typography variant="h5" component="div">
+                    {t.task}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t.priority}
+                  </Typography>
+                </CardContent>
+              </CardActionArea>
+            </Card>
           ))}
-        </ul>
+        </Box>
       </div>
       <button onClick={handleRank} disabled={tasks.length === 0 || loading}>
         {loading ? "Geminiが優先順位付け中..." : "LLMで優先順位を付ける"}
