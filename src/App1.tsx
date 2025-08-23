@@ -6,6 +6,7 @@ import { saveTasks, loadTasks } from "./task";
 import { LoginButton } from "./loginbutton";
 import { Box, Card, CardContent, IconButton, Typography, CardActionArea } from '@mui/material';
 import MicIcon from '@mui/icons-material/Mic';
+import { CheckCircle as CheckIcon, Delete as DeleteIcon, PlusOneRounded as PlusIcon, Menu as MenuIcon } from '@mui/icons-material';
 
 const genAI = new GoogleGenerativeAI(process.env.REACT_APP_GEMINI_API_KEY as string);
 
@@ -115,7 +116,7 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
 
   return (
     <div style={{ maxWidth: 480, margin: "2em auto", fontFamily: "sans-serif" }}>
-      <h2>音声タスク管理（Gemini LLM連携）</h2>
+      {/* <h2>音声タスク管理（Gemini LLM連携）</h2> */}
       <div style={{ marginBottom: 16 }}>
         <input
           type="text"
@@ -130,17 +131,18 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
       </div>
       <div style={{ marginBottom: 16 }}>
         {/* <button onClick={handleStart} disabled={listening}>🎤 音声入力</button> */}
-        <IconButton onClick={handleStart} disabled={listening} color="primary" size="large" aria-label="start voice input">
-          <MicIcon />
-        </IconButton>
-        <button onClick={handleAddTaskVoice} disabled={!transcript}>タスク追加</button>
+        {/* <button onClick={handleAddTaskVoice} disabled={!transcript}>タスク追加</button> */}
         <span style={{ marginLeft: 8, color: listening ? "green" : "gray" }}>
           {listening ? "録音中..." : ""}
         </span>
-        <div style={{ marginTop: 8, minHeight: 24 }}>{transcript}</div>
+        <div style={{ marginTop: 8, minHeight: 24 }}>{transcript}
+          <IconButton onClick={handleAddTaskVoice} disabled={!transcript} color="primary" size="large" aria-label="add task">
+            <CheckIcon />
+          </IconButton>
+        </div>
       </div>
       <div>
-        <strong>タスク一覧:</strong>
+        {/* <strong>タスク一覧:</strong> */}
         <Box
           sx={{
             width: '100%',
@@ -167,12 +169,21 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
                 }}
               >
                 <CardContent sx={{ height: '100%' }}>
-                  <Typography variant="h5" component="div">
+                  <Typography variant="h6" component="div">
                     {t.task}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {t.priority}
                   </Typography>
+                  <IconButton onClick={handleStart} disabled={listening} color="primary" size="large" aria-label="start voice input">
+                    <CheckIcon />
+                  </IconButton>
+                  <IconButton onClick={handleStart} disabled={listening} color="primary" size="large" aria-label="start voice input">
+                    <PlusIcon />
+                  </IconButton>
+                  <IconButton onClick={handleStart} disabled={listening} color="primary" size="large" aria-label="start voice input">
+                    <DeleteIcon />
+                  </IconButton>
                 </CardContent>
               </CardActionArea>
             </Card>
@@ -200,6 +211,22 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
           </ol>
         </div>
       )}
+      {/* 画面右下固定でボタンを表示する */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: 20,
+          right: 20,
+          zIndex: 1000,
+        }}
+      >
+        <IconButton onClick={handleStart} disabled={listening} color="primary" size="large" aria-label="start voice input">
+          <MicIcon />
+        </IconButton>
+        <IconButton onClick={handleStart} disabled={listening} color="primary" size="large" aria-label="start voice input">
+          <MenuIcon />
+        </IconButton>
+      </Box>
     </div>
   );
 };
