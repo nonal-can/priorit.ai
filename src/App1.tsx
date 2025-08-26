@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { UserContext } from "./Usercontext";
 import { saveTasks, loadTasks } from "./task";
 import { LoginButton } from "./loginbutton";
-import { Box, Card, CardContent, IconButton, Typography, CardActionArea } from '@mui/material';
+import { Box, Card, CardContent, IconButton, Typography, CardActionArea,Dialog, DialogTitle, DialogContent, DialogActions, Button} from '@mui/material';
 import MicIcon from '@mui/icons-material/Mic';
 import { CheckCircle as CheckIcon, Delete as DeleteIcon, PlusOneRounded as PlusIcon, Menu as MenuIcon } from '@mui/icons-material';
 
@@ -25,13 +25,13 @@ const fixTaskArray = (arr: any[]): Task[] =>
 
 const App: React.FC = () => {
   const { user, authChecked } = useContext(UserContext);
-
+  const [openMicModal, setOpenMicModal] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [rankedTasks, setRankedTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(false);
   const [inputTask, setInputTask] = useState(""); // ←追加
 
-  const { transcript, listening, resetTranscript } = useSpeechRecognition();
+  const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } = useSpeechRecognition();
 
   useEffect(() => {
     if (user) {
@@ -78,6 +78,33 @@ const App: React.FC = () => {
       setRankedTasks([]);
     }
   };
+
+  // モーダルを開く
+  const handleOpenMicModal = () => {
+    setOpenMicModal(true);
+    resetTranscript();
+    SpeechRecognition.startListening({ continuous: false, language: "ja-JP" });
+  };
+
+  // モーダルを閉じる
+  const handleCloseMicModal = () => {
+    setOpenMicModal(false);
+    SpeechRecognition.stopListening();
+    resetTranscript();
+  };
+
+  // モーダル内でタスク追加
+  const handleAddTaskFromModal = async () => {
+    if (!user || !transcript.trim()) return;
+    const newTasks = [
+      ...tasks,
+      { task: transcript.trim(), priority: "medium" as const }
+    ];
+    setTasks(newTasks);
+    await saveTasks(user.uid, newTasks);
+    handleCloseMicModal();
+  };
+
   const priorityValue = (p: "high" | "medium" | "low") =>
   p === "high" ? 2 : p === "medium" ? 1 : 0;
 
@@ -227,13 +254,40 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
           zIndex: 1000,
         }}
       >
-        <IconButton onClick={handleStart} disabled={listening} color="primary" size="large" aria-label="start voice input">
+        <IconButton onClick={handleOpenMicModal} color="primary" size="large" aria-label="start voice input">
           <MicIcon />
         </IconButton>
         <IconButton onClick={handleStart} disabled={listening} color="primary" size="large" aria-label="start voice input">
           <MenuIcon />
         </IconButton>
       </Box>
+
+      <Dialog open={openMicModal} onClose={handleCloseMicModal} fullWidth>
+        <DialogTitle>音声入力でタスク追加</DialogTitle>
+        <DialogContent>
+          {!browserSupportsSpeechRecognition && (
+            <Typography color="error">このブラウザは音声認識に対応していません</Typography>
+          )}
+          <Typography variant="subtitle1" sx={{ mt: 2 }}>
+            {listening ? "録音中..." : ""}
+          </Typography>
+          <Typography variant="body1" sx={{ mt: 2, minHeight: 28 }}>
+            {transcript}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseMicModal}>キャンセル</Button>
+          <Button 
+            onClick={handleAddTaskFromModal} 
+            disabled={!transcript.trim()}
+            color="primary"
+            variant="contained"
+            startIcon={<CheckIcon />}
+          >
+            タスク追加
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };
