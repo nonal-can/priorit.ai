@@ -78,6 +78,8 @@ const App: React.FC = () => {
       setRankedTasks([]);
     }
   };
+  const priorityValue = (p: "high" | "medium" | "low") =>
+  p === "high" ? 2 : p === "medium" ? 1 : 0;
 
   const handleRank = async () => {
     setLoading(true);
@@ -101,7 +103,9 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
     if (jsonMatch) {
       try {
         const parsed = fixTaskArray(JSON.parse(jsonMatch[0]));
+        const sorted = parsed.sort((a, b) => priorityValue(b.priority) - priorityValue(a.priority));
         setRankedTasks(parsed);
+        if(user) await saveTasks(user.uid, sorted);
       } catch (e) {
         alert("LLMの返答をパースできませんでした\n" + text);
       }
@@ -152,8 +156,11 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
             gap: 1,
           }}
         >
-          {tasks.map((t, i) => (
-            <Card style={{marginBottom: 0.5}}>
+          {tasks
+            .slice()
+            .sort((a,b) => priorityValue(b.priority) - priorityValue(a.priority))
+            .map((t, i) => (
+            <Card style={{marginBottom: 0.5}} key={i}>
               <CardActionArea
                 // onClick={() => setSelectedCard(index)}
                 // data-active={selectedCard === index ? '' : undefined}
