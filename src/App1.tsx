@@ -12,16 +12,24 @@ const genAI = new GoogleGenerativeAI(process.env.REACT_APP_GEMINI_API_KEY as str
 
 type Task = {
   task: string;
-  priority: "high" | "medium" | "low";
+//   priority: "high" | "medium" | "low";
+  priority: number;
 };
 
+// const fixTaskArray = (arr: any[]): Task[] =>
+//   arr.map((t: any) => ({
+//     task: t.task,
+//     priority: (["high", "medium", "low"].includes(t.priority)
+//       ? t.priority
+//       : "medium") as "high" | "medium" | "low"
+//   }));
 const fixTaskArray = (arr: any[]): Task[] =>
-  arr.map((t: any) => ({
+arr.map((t: any) => ({
     task: t.task,
-    priority: (["high", "medium", "low"].includes(t.priority)
-      ? t.priority
-      : "medium") as "high" | "medium" | "low"
+    priority: typeof t.priority === "number" ? t.priority : 50 // デフォルト値は50など
   }));
+
+
 
 const App: React.FC = () => {
   const { user, authChecked } = useContext(UserContext);
@@ -55,7 +63,7 @@ const App: React.FC = () => {
     if (!user || !inputTask.trim()) return;
     const newTasks = [
       ...tasks,
-      { task: inputTask.trim(), priority: "medium" as const }
+      { task: inputTask.trim(), priority: 50 }
     ];
     setTasks(newTasks);
     await saveTasks(user.uid, newTasks);
@@ -69,7 +77,7 @@ const App: React.FC = () => {
     if (transcript.trim()) {
       const newTasks = [
         ...tasks,
-        { task: transcript.trim(), priority: "medium" as const }
+        { task: transcript.trim(), priority: 50}
       ];
       setTasks(newTasks);
       await saveTasks(user.uid, newTasks);
@@ -98,7 +106,7 @@ const App: React.FC = () => {
     if (!user || !transcript.trim()) return;
     const newTasks = [
       ...tasks,
-      { task: transcript.trim(), priority: "medium" as const }
+      { task: transcript.trim(), priority: 50}
     ];
     setTasks(newTasks);
     await saveTasks(user.uid, newTasks);
@@ -111,13 +119,12 @@ const App: React.FC = () => {
   const handleRank = async () => {
     setLoading(true);
     const prompt = `
-あなたはタスク管理AIです。以下のタスク一覧に対し、「今日」や「明日」などの時間情報や、内容の緊急度・重要度を考慮して
-「high」「medium」「low」のpriorityを付けて、JSON配列で返してください。
-priorityは "high" "medium" "low" のいずれかとし、日本語は使わないこと。
+あなたはタスク管理AIです。以下のタスク一覧に対し、緊急度・重要度・期限などを考慮してpriority（重要度）を1〜100の整数で付けてください。
+priorityは必ず1（最も低い）〜100（最も高い）の範囲の整数とし、日本語は使わずJSON配列で返してください。
 例:
 [
-  {"task": "メール返信", "priority": "high"},
-  {"task": "昼ごはん", "priority": "low"}
+  {"task": "メール返信", "priority": 90},
+  {"task": "昼ごはん", "priority": 20}
 ]
 タスク: ${JSON.stringify(tasks.map(t => t.task))}
     `;
@@ -130,7 +137,8 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
     if (jsonMatch) {
       try {
         const parsed = fixTaskArray(JSON.parse(jsonMatch[0]));
-        const sorted = parsed.sort((a, b) => priorityValue(b.priority) - priorityValue(a.priority));
+        // const sorted = parsed.sort((a, b) => priorityValue(b.priority) - priorityValue(a.priority));
+        const sorted = parsed.sort((a, b) => b.priority - a.priority);
         setRankedTasks(parsed);
         if(user) await saveTasks(user.uid, sorted);
       } catch (e) {
@@ -185,7 +193,8 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
         >
           {tasks
             .slice()
-            .sort((a,b) => priorityValue(b.priority) - priorityValue(a.priority))
+            // .sort((a,b) => priorityValue(b.priority) - priorityValue(a.priority))
+            .sort((a, b) => b.priority - a.priority)
             .map((t, i) => (
             <Card style={{marginBottom: 0.5}} key={i}>
               <CardActionArea
@@ -236,9 +245,12 @@ priorityは "high" "medium" "low" のいずれかとし、日本語は使わな�
                 <span style={{ fontWeight: "bold" }}>{t.task}</span>
                 <span style={{
                   marginLeft: 8,
-                  color: { high: "red", medium: "orange", low: "gray" }[t.priority]
+                  color:
+                    t.priority >= 80 ? "red" :
+                    t.priority >= 50 ? "orange" :
+                    t.priority >= 20 ? "gray" : "black"
                 }}>
-                  [{t.priority}]
+                  [priority: {t.priority}]
                 </span>
               </li>
             ))}
