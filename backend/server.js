@@ -288,30 +288,96 @@ ${context ? "これまでの会話：\n" + context : ""}
     // レスポンス処理
     const text = result.data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
     
-    // JSONの抽出
+    // JSONの抽出とフォールバック整形の強化
     try {
+      // 最も確実なJSON抽出パターン: コードブロック内のJSONを探す
+      const codeBlockMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (codeBlockMatch) {
+        const parsedResponse = JSON.parse(codeBlockMatch[1]);
+        res.json(parsedResponse);
+        return;
+      }
+      
+      // 次に一般的なJSONパターンを探す
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsedResponse = JSON.parse(jsonMatch[0]);
         res.json(parsedResponse);
-      } else {
-        // JSON形式でない場合のフォールバック
+        return;
+      }
+      
+      // JSON形式でない場合の強化されたフォールバック
+      console.log("JSON形式が検出できませんでした。テキスト応答:", text);
+      
+      // テキストから可能な限り情報を抽出
+      const actionType = 
+        text.includes('新規') || text.includes('作成') || text.includes('追加') ? 'create' :
+        text.includes('更新') || text.includes('変更') ? 'update' : 'clarify';
+      
+      // タイトル/タスク名の抽出試行
+      const titleMatch = text.match(/タイトル[：:]\s*(.+?)[\n\.。]/i) || 
+                         text.match(/タスク[：:]\s*(.+?)[\n\.。]/i);
+      const title = titleMatch ? titleMatch[1].trim() : "";
+      
+      // 期限の抽出試行
+      const dueDateMatch = text.match(/期限[：:]\s*(.+?)[\n\.。]/i) || 
+                           text.match(/期日[：:]\s*(.+?)[\n\.。]/i);
+      const dueDate = dueDateMatch ? dueDateMatch[1].trim() : "";
+      
+      // 優先度の抽出試行
+      const priorityMatch = text.match(/優先度[：:]\s*(\d+)/i);
+      const priority = priorityMatch ? parseInt(priorityMatch[1]) : null;
+      
+      // 理由の抽出試行
+      const reasonMatch = text.match(/理由[：:]\s*(.+?)[\n\.。]/i);
+      const reason = reasonMatch ? reasonMatch[1].trim() : "";
+      
+      // アクションタイプに応じたレスポンス構築
+      if (actionType === 'create') {
         res.json({
+          action: "create",
           message: text,
-          extractedTask: {},
-          complete: false,
-          nextQuestion: null,
-          options: []
+          extractedTask: {
+            title: title,
+            dueDate: dueDate || "特に期限なし",
+            priority: priority || 50,
+            reason: reason || "未指定",
+            tags: []
+          },
+          complete: !!title
+        });
+      } else if (actionType === 'update') {
+        res.json({
+          action: "update",
+          message: text,
+          updatedTask: {
+            id: "", // IDは特定できないのでフロントエンドで処理
+            task: title,
+            dueDate: dueDate,
+            priority: priority,
+            reason: reason
+          }
+        });
+      } else {
+        // 質問オプションの抽出試行
+        const optionsMatch = text.match(/選択肢[：:]\s*(.+?)(?:\n|$)/ig);
+        const options = optionsMatch 
+          ? optionsMatch.map(m => m.replace(/選択肢[：:]\s*/i, '').trim())
+          : ["はい", "いいえ", "もう少し詳しく教えてください", "別の選択肢を提案してください", "後で決めます"];
+        
+        res.json({
+          action: "clarify",
+          message: text,
+          options: options
         });
       }
     } catch (jsonError) {
-      console.error("JSON解析エラー:", jsonError);
+      console.error("JSON解析エラー:", jsonError, "テキスト:", text);
+      // 最終的なフォールバック
       res.json({
-        message: text,
-        extractedTask: {},
-        complete: false,
-        nextQuestion: null,
-        options: []
+        action: "clarify",
+        message: "申し訳ありません、応答の処理中にエラーが発生しました。もう一度お試しください。",
+        options: ["もう一度試す", "別の言い方で説明する", "新しいタスクを作成する", "既存のタスクを更新する", "キャンセル"]
       });
     }
   } catch (e) {
